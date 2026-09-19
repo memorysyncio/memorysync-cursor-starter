@@ -1,4 +1,4 @@
-# MemorySync Cursor Starter Template
+﻿# MemorySync Cursor Starter Template
 
 > **Stop Cursor from forgetting your project architecture across chat restarts.**
 
@@ -10,7 +10,9 @@ This repository is a production-ready starter template configured with **MemoryS
 
 * `.cursor/mcp.json`: Preconfigured with MemorySync remote MCP endpoints (both memory and live zero-signup docs).
 * `.cursorrules`: Strict developer instructions instructing Cursor when to save decisions and how to recall them with zero context bloat.
-* `examples/quickstart.py`: Minimal Python example demonstrating how to save and recall scoped facts programmatically.
+* `setup.sh` & `setup.ps1`: Automated 1-click cross-platform setup scripts for macOS, Linux, and Windows.
+* `tools/inspect_memory.sh` & `tools/inspect_memory.ps1`: Single-file, zero-dependency terminal memory inspector.
+* `examples/minimal_mcp_client.py`: Minimal Python example demonstrating how to interact with MCP programmatically.
 
 ---
 
@@ -22,17 +24,45 @@ git clone https://github.com/memorysyncio/memorysync-cursor-starter.git my-agent
 cd my-agent-project
 ```
 
-### 2. Open in Cursor
+### 2. Run Automated Setup
+- **macOS / Linux:**
+  ```bash
+  chmod +x setup.sh && ./setup.sh
+  ```
+- **Windows (PowerShell):**
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File .\setup.ps1
+  ```
+
+### 3. Open in Cursor
 Open this folder in Cursor IDE:
 ```bash
 cursor .
 ```
 
-### 3. Verify MCP Connection
+### 4. Verify MCP Connection
 1. Open Cursor **Settings** (`Cmd + ,` or `Ctrl + ,`) > **Features** > **MCP**.
 2. You will see two active servers:
    * `memorysync` (`https://mcp.memorysync.io/mcp`) — For persistent memory storage & semantic search.
    * `memorysync-docs` (`https://docs.memorysync.io/mcp`) — Instant live documentation search without sign-up.
+
+---
+
+## Terminal Memory Inspector
+
+Inspect and verify saved memories directly from your terminal without opening a browser:
+
+```bash
+# macOS / Linux
+./tools/inspect_memory.sh ping
+./tools/inspect_memory.sh stats -k "ms_live_..."
+./tools/inspect_memory.sh query "PostgreSQL configuration" -k "ms_live_..."
+
+# Windows PowerShell
+.\tools\inspect_memory.ps1 -Command ping
+.\tools\inspect_memory.ps1 -Command stats -ApiKey "ms_live_..."
+.\tools\inspect_memory.ps1 -Command query -Query "PostgreSQL configuration" -ApiKey "ms_live_..."
+```
 
 ---
 
@@ -63,13 +93,6 @@ cursor .
 
 ## Documentation & Resources
 
-* **Live MCP Docs Endpoint (Zero Signup):** [https://docs.memorysync.io/mcp](https://docs.memorysync.io/mcp)
-* **Official Cursor Guide:** [docs.memorysync.io/guides/cursor](https://docs.memorysync.io/guides/cursor)
-* **MemorySync Platform:** [memorysync.io](https://memorysync.io)
-* **Console:** [app.memorysync.io](https://app.memorysync.io)
-
----
-
-## License
-
-MIT License. Free to use for personal and commercial projects.
+* **Cursor Guide:** [https://docs.memorysync.io/guides/cursor](https://docs.memorysync.io/guides/cursor)
+* **MCP Integration Docs:** [https://docs.memorysync.io/mcp/overview](https://docs.memorysync.io/mcp/overview)
+* **Live Zero-Signup Docs MCP:** [https://docs.memorysync.io/mcp](https://docs.memorysync.io/mcp)
