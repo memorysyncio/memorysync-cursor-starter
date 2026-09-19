@@ -30,7 +30,7 @@ To bridge remote SSE or HTTP endpoints to Claude Desktop's stdio transport, use 
       "args": [
         "-y",
         "mcp-remote",
-        "https://mcp.memorysync.io/sse"
+        "https://mcp.memorysync.io/mcp"
       ]
     },
     "custom-remote-tool": {
