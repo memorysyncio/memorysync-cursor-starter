@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  memorysync-starter:
+    build: .
+    container_name: memorysync-cursor-starter
+    volumes:
+      - .:/workspace
+    environment:
+      - MEMORYSYNC_API_KEY=${MEMORYSYNC_API_KEY:-}
+      - MEMORYSYNC_MCP_URL=https://mcp.memorysync.io/mcp
+      - MEMORYSYNC_DOCS_MCP_URL=https://docs.memorysync.io/mcp
+    command: ["./tools/inspect_memory.sh", "ping"]
+
+  test:
+    build: .
+    volumes:
+      - .:/workspace
+    environment:
+      - MEMORYSYNC_API_KEY=${MEMORYSYNC_API_KEY:-}
+      - MEMORYSYNC_MCP_URL=https://mcp.memorysync.io/mcp
+      - MEMORYSYNC_DOCS_MCP_URL=https://docs.memorysync.io/mcp
+    command: ["python3", "examples/minimal_mcp_client.py"]

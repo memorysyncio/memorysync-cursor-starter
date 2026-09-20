@@ -1,4 +1,4 @@
-﻿# MemorySync Cursor Starter Template
+# MemorySync Cursor Starter Template
 
 > **Stop Cursor from forgetting your project architecture across chat restarts.**
 
@@ -25,6 +25,8 @@ cd my-agent-project
 ```
 
 ### 2. Run Automated Setup
+
+**Option A: Local Terminal (macOS / Linux / Windows)**
 - **macOS / Linux:**
   ```bash
   chmod +x setup.sh && ./setup.sh
@@ -33,6 +35,15 @@ cd my-agent-project
   ```powershell
   powershell -ExecutionPolicy Bypass -File .\setup.ps1
   ```
+
+**Option B: Docker (Containerized Testing)**
+```bash
+# Verify connection inside container
+docker compose run --rm memorysync-starter
+
+# Run programmatic Python client test
+docker compose run --rm test
+```
 
 ### 3. Open in Cursor
 Open this folder in Cursor IDE:
