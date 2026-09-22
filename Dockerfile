@@ -27,5 +27,5 @@ COPY . /workspace
 # Make scripts executable
 RUN chmod +x setup.sh tools/inspect_memory.sh 2>/dev/null || true
 
-# Default command runs ping check
-CMD ["./tools/inspect_memory.sh", "ping"]
+# Default command runs the MCP stdio server
+CMD ["python3", "server.py"]

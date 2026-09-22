@@ -8,11 +8,42 @@ This repository is a production-ready starter template configured with **MemoryS
 
 ## What's Included
 
+* `server.py`: Runnable, zero-dependency standard MCP stdio server implementing the full Model Context Protocol (MCP 2024-11-05) for Cursor, Claude Desktop, and AI agents.
+* `Dockerfile` & `docker-compose.yml`: Containerized deployment running the MCP server over stdio.
 * `.cursor/mcp.json`: Preconfigured with MemorySync remote MCP endpoints (both memory and live zero-signup docs).
 * `.cursorrules`: Strict developer instructions instructing Cursor when to save decisions and how to recall them with zero context bloat.
 * `setup.sh` & `setup.ps1`: Automated 1-click cross-platform setup scripts for macOS, Linux, and Windows.
 * `tools/inspect_memory.sh` & `tools/inspect_memory.ps1`: Single-file, zero-dependency terminal memory inspector.
 * `examples/minimal_mcp_client.py`: Minimal Python example demonstrating how to interact with MCP programmatically.
+
+---
+
+## Running the MCP Server (stdio)
+
+Run the server directly with Python 3:
+```bash
+python3 server.py
+```
+
+Or connect it to Claude Desktop / Cursor using stdio configuration:
+```json
+{
+  "mcpServers": {
+    "memorysync": {
+      "command": "python3",
+      "args": ["/path/to/memorysync-cursor-starter/server.py"],
+      "env": {
+        "MEMORYSYNC_API_KEY": "your_api_key_here"
+      }
+    }
+  }
+}
+```
+
+### Supported MCP Tools:
+* `memorysync_search`: Semantic search over persistent long-term memories with sub-50ms latency.
+* `memorysync_add`: Save a new durable memory, preference, or architectural decision.
+* `memorysync_read_docs`: Query official MemorySync API, SDK, and integration documentation on demand.
 
 ---
 
