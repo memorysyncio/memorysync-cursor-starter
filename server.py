@@ -13,7 +13,7 @@ import urllib.request
 import urllib.error
 
 SERVER_NAME = "memorysync-cursor-starter"
-SERVER_VERSION = "1.0.0"
+SERVER_VERSION = "1.0.1"
 PROTOCOL_VERSION = "2024-11-05"
 
 DEFAULT_DOCS_ENDPOINT = os.environ.get("MEMORYSYNC_DOCS_MCP_URL", "https://docs.memorysync.io/mcp")

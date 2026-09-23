@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "memorysync-mcp-starter"
-version = "1.0.0"
+version = "1.0.1"
 description = "Persistent, scoped memory for Cursor, Claude Desktop and Claude Code over the Model Context Protocol. Zero dependencies."
 readme = "README.md"
 license = { file = "LICENSE" }
