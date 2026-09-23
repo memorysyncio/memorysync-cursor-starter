@@ -72,7 +72,18 @@ jobs:
           python - <<'PY'
           import json, sys
 
-          EXPECTED = {"memorysync_search", "memorysync_add", "memorysync_read_docs"}
+          # Kept in lockstep with TOOLS in server.py. A mismatch here is the
+          # intended alarm: adding or removing a tool is a published-contract
+          # change and should require updating this list consciously.
+          EXPECTED = {
+              "memorysync_search",
+              "memorysync_add",
+              "memorysync_read_docs",
+              "memorysync_get",
+              "memorysync_related",
+              "memorysync_decisions",
+              "memorysync_forget",
+          }
 
           tools = None
           for line in open("tools.jsonl", encoding="utf-8"):
@@ -112,10 +123,21 @@ jobs:
           if problems:
               sys.exit("tool definition contract failed:\n  " + "\n  ".join(problems))
 
+          # Destructive tools must preview by default. Shipping a delete that
+          # acts on the first call is how an agent silently destroys user data.
+          forget = next((t for t in tools if t["name"] == "memorysync_forget"), None)
+          if forget is not None:
+              dry = forget["inputSchema"]["properties"].get("dry_run", {})
+              if dry.get("default") is not True:
+                  sys.exit("memorysync_forget must default dry_run to true")
+              if not (forget.get("annotations") or {}).get("destructiveHint"):
+                  sys.exit("memorysync_forget must set destructiveHint")
+
           print(f"{len(tools)} tools validated:")
-          for t in tools:
-              ro = (t.get("annotations") or {}).get("readOnlyHint")
-              print(f"  {t['name']:<22} readOnly={ro}  {t['title']}")
+          for t in sorted(tools, key=lambda x: x["name"]):
+              ann = t.get("annotations") or {}
+              print(f"  {t['name']:<22} readOnly={str(ann.get('readOnlyHint')):<5} "
+                    f"destructive={str(ann.get('destructiveHint', False)):<5} {t['title']}")
           PY
 
       - name: stdout carries only JSON-RPC

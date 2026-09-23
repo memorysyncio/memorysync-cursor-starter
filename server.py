@@ -9,11 +9,12 @@ Specification: Model Context Protocol (MCP) 2024-11-05
 import sys
 import json
 import os
-import urllib.request
 import urllib.error
+import urllib.parse
+import urllib.request
 
 SERVER_NAME = "memorysync-cursor-starter"
-SERVER_VERSION = "1.0.2"
+SERVER_VERSION = "1.1.0"
 PROTOCOL_VERSION = "2024-11-05"
 
 DEFAULT_DOCS_ENDPOINT = os.environ.get("MEMORYSYNC_DOCS_MCP_URL", "https://docs.memorysync.io/mcp")
@@ -208,6 +209,211 @@ TOOLS = [
             "readOnlyHint": True,
             "openWorldHint": True
         }
+    },
+    {
+        "name": "memorysync_get",
+        "title": "Read one memory in full",
+        "description": (
+            "Fetch the complete stored record for a single memory id, including its text, "
+            "tags, importance and timestamps. Use this after memorysync_search when a result "
+            "looks relevant but the snippet is not enough to act on, or when you need the "
+            "creation date to judge whether a fact is stale. Takes an id, not a search "
+            "phrase - to find a memory by topic, call memorysync_search first and pass an id "
+            "from its results."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "memory_id": {
+                    "type": "string",
+                    "description": "Identifier of the memory to read, taken from the id field of a memorysync_search result.",
+                    "minLength": 1,
+                    "examples": ["mem_7f2a91c4"]
+                }
+            },
+            "required": ["memory_id"],
+            "additionalProperties": False
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "Identifier of the memory."},
+                "text": {"type": "string", "description": "The stored fact in full."},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags attached to this memory."},
+                "importance": {"type": "number", "description": "Importance score used in ranking."},
+                "created_at": {"type": "string", "description": "When the fact was first observed, for judging staleness."},
+                "updated_at": {"type": "string", "description": "When the record last changed."}
+            },
+            "required": ["id", "text"]
+        },
+        "annotations": {
+            "readOnlyHint": True,
+            "openWorldHint": True
+        }
+    },
+    {
+        "name": "memorysync_related",
+        "title": "Find memories connected to a topic",
+        "description": (
+            "Traverse the memory graph to return facts connected to a topic, so you can see "
+            "the surrounding context rather than isolated matches. Use this when a decision "
+            "depends on several linked facts - for example every memory touching "
+            "authentication - or to discover related constraints you did not think to search "
+            "for. memorysync_search ranks independent matches by relevance; this returns a "
+            "connected neighbourhood instead."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "q": {
+                    "type": "string",
+                    "description": "Topic to centre the graph on, for example 'authentication' or 'database schema'.",
+                    "minLength": 1,
+                    "examples": ["authentication", "deployment"]
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum connected memories to return. Defaults to 20 if omitted. Larger graphs are harder to reason over, so raise this only when mapping an area.",
+                    "default": 20,
+                    "minimum": 1,
+                    "maximum": 100
+                },
+                "decision_focus": {
+                    "type": "boolean",
+                    "description": "When true, restricts the graph to memories that record decisions rather than general facts. Useful for reconstructing why something was chosen.",
+                    "default": False
+                }
+            },
+            "required": ["q"],
+            "additionalProperties": False
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "nodes": {
+                    "type": "array",
+                    "description": "Connected memories.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string", "description": "Memory identifier."},
+                            "text": {"type": "string", "description": "The stored fact."}
+                        }
+                    }
+                },
+                "edges": {
+                    "type": "array",
+                    "description": "Relationships between the returned memories.",
+                    "items": {"type": "object"}
+                }
+            }
+        },
+        "annotations": {
+            "readOnlyHint": True,
+            "openWorldHint": True
+        }
+    },
+    {
+        "name": "memorysync_decisions",
+        "title": "List recorded decisions and contradictions",
+        "description": (
+            "Return memories that record decisions, along with any that contradict each "
+            "other, so a superseded choice is visible rather than silently competing with "
+            "the current one. Call this before proposing an architectural change, to check "
+            "whether the question was already settled and why. This surfaces conflict "
+            "between stored facts; memorysync_search returns matches without telling you "
+            "when two of them disagree."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Optional topic filter, for example 'caching'. Omit to list recent decisions across all areas."
+                },
+                "k": {
+                    "type": "integer",
+                    "description": "Maximum decisions to return. Defaults to 10 if omitted.",
+                    "default": 10,
+                    "minimum": 1,
+                    "maximum": 50
+                }
+            },
+            "additionalProperties": False
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "decisions": {
+                    "type": "array",
+                    "description": "Recorded decisions, newest first.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string", "description": "Memory identifier."},
+                            "text": {"type": "string", "description": "The decision as recorded."},
+                            "created_at": {"type": "string", "description": "When it was decided."},
+                            "superseded_by": {"type": "string", "description": "Present when a later decision replaced this one."}
+                        }
+                    }
+                }
+            }
+        },
+        "annotations": {
+            "readOnlyHint": True,
+            "openWorldHint": True
+        }
+    },
+    {
+        "name": "memorysync_forget",
+        "title": "Delete memories (previews by default)",
+        "description": (
+            "Permanently delete one or more memories by id. Use this when a stored fact is "
+            "wrong or the user asks you to forget something - not to tidy up, because a "
+            "deleted memory cannot be recovered. This previews by default: it reports what "
+            "would be deleted and deletes nothing until dry_run is explicitly set to false. "
+            "Confirm with the user before that second call. To find the ids to pass, use "
+            "memorysync_search."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "memory_ids": {
+                    "type": "array",
+                    "description": "Identifiers of the memories to delete, from memorysync_search results.",
+                    "items": {"type": "string"},
+                    "minItems": 1,
+                    "examples": [["mem_7f2a91c4"]]
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "Defaults to true, which previews the deletion without performing it. Pass false only after the user has confirmed.",
+                    "default": True
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Short note recorded in the audit log explaining why these memories were removed.",
+                    "examples": ["fact was superseded", "user requested removal"]
+                }
+            },
+            "required": ["memory_ids"],
+            "additionalProperties": False
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "dry_run": {"type": "boolean", "description": "Whether this call only previewed."},
+                "deleted_count": {"type": "integer", "description": "Number deleted, or number that would be deleted when previewing."},
+                "deleted_ids": {"type": "array", "items": {"type": "string"}, "description": "Identifiers affected."}
+            },
+            "required": ["dry_run", "deleted_count"]
+        },
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": True,
+            "idempotentHint": True,
+            "openWorldHint": True
+        }
     }
 ]
 
@@ -254,6 +460,89 @@ def handle_tools_list(req_id):
     }
 
 
+def _auth_headers(api_key: str) -> dict:
+    return {
+        "Authorization": f"Bearer {api_key}",
+        "X-API-Key": api_key,
+        "X-End-User-ID": os.environ.get("MEMORYSYNC_USER_ID", "default-user"),
+        "Content-Type": "application/json",
+    }
+
+
+def _tool_result(req_id, payload, is_error: bool = False):
+    """Wrap a payload as an MCP tool result.
+
+    When the payload is a dict it is returned as ``structuredContent`` as well as
+    text. These tools declare an ``outputSchema``, and a client that reads the
+    schema expects structured output to match it - returning only a text blob
+    makes the schema a promise the server does not keep.
+    """
+    text = payload if isinstance(payload, str) else json.dumps(payload, indent=2)
+    result = {"content": [{"type": "text", "text": text}]}
+    if isinstance(payload, dict) and not is_error:
+        result["structuredContent"] = payload
+    if is_error:
+        result["isError"] = True
+    return {"jsonrpc": "2.0", "id": req_id, "result": result}
+
+
+def _require_key(req_id):
+    """Return an error result when no credentials are configured, or None.
+
+    This deliberately fails loudly. Reporting success for a write that never
+    reached the server teaches the model a fact is stored when it is not, and the
+    loss only surfaces later as a silent empty read.
+    """
+    if os.environ.get("MEMORYSYNC_API_KEY"):
+        return None
+    return _tool_result(
+        req_id,
+        "MEMORYSYNC_API_KEY is not set, so this call was not sent and nothing was "
+        "stored or retrieved. Export MEMORYSYNC_API_KEY and retry. The "
+        "memorysync_read_docs tool needs no credentials and still works.",
+        is_error=True,
+    )
+
+
+def _api(req_id, method: str, path: str, *, body=None, query=None):
+    """Call the MemorySync REST API and return an MCP tool result."""
+    missing = _require_key(req_id)
+    if missing is not None:
+        return missing
+
+    url = f"{DEFAULT_API_ENDPOINT}{path}"
+    if query:
+        pairs = {k: v for k, v in query.items() if v is not None}
+        if pairs:
+            url = f"{url}?{urllib.parse.urlencode(pairs)}"
+
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers=_auth_headers(os.environ["MEMORYSYNC_API_KEY"]),
+        method=method,
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read().decode("utf-8")
+        return _tool_result(req_id, json.loads(raw) if raw.strip() else {})
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")[:400]
+        return _tool_result(
+            req_id,
+            f"MemorySync API returned HTTP {exc.code} for {method} {path}: {detail}",
+            is_error=True,
+        )
+    except Exception as exc:  # noqa: BLE001 - surfaced to the agent, not swallowed
+        return _tool_result(
+            req_id,
+            f"Could not reach the MemorySync API ({type(exc).__name__}: {exc}). "
+            "Nothing was stored or retrieved.",
+            is_error=True,
+        )
+
+
 def handle_tools_call(req_id, params):
     name = params.get("name")
     args = params.get("arguments", {})
@@ -264,7 +553,10 @@ def handle_tools_call(req_id, params):
         api_key = os.environ.get("MEMORYSYNC_API_KEY")
         
         if not api_key:
-            content_text = f"MemorySync search executed for query: '{query}' (k={k}). Note: MEMORYSYNC_API_KEY environment variable is not set. To connect to live cloud memory, export MEMORYSYNC_API_KEY='ms_...'. Staging mode active: 0 remote errors."
+            # Previously this reported "staging mode active: 0 remote errors",
+            # which reads as success for a search that never ran. An agent told
+            # that gets back nothing and concludes no memories exist.
+            return _require_key(req_id)
         else:
             try:
                 url = f"{DEFAULT_API_ENDPOINT}/memory/query"
@@ -305,7 +597,10 @@ def handle_tools_call(req_id, params):
         api_key = os.environ.get("MEMORYSYNC_API_KEY")
 
         if not api_key:
-            content_text = f"Memory recorded locally: '{text}' (source={source}). Staged successfully."
+            # Previously this claimed "recorded locally... staged successfully"
+            # while storing nothing anywhere. Silent write loss is the worst
+            # failure a memory layer can have, so this now fails loudly.
+            return _require_key(req_id)
         else:
             try:
                 url = f"{DEFAULT_API_ENDPOINT}/memory/add"
@@ -362,6 +657,62 @@ def handle_tools_call(req_id, params):
                 ]
             }
         }
+
+    elif name == "memorysync_get":
+        memory_id = args.get("memory_id", "").strip()
+        if not memory_id:
+            return _tool_result(req_id, "memory_id is required.", is_error=True)
+        return _api(req_id, "GET", f"/memory/{urllib.parse.quote(memory_id, safe='')}")
+
+    elif name == "memorysync_related":
+        q = args.get("q", "").strip()
+        if not q:
+            return _tool_result(req_id, "q is required.", is_error=True)
+        return _api(
+            req_id,
+            "GET",
+            "/memory/graph",
+            query={
+                "q": q,
+                "limit": args.get("limit", 20),
+                "decision_focus": str(bool(args.get("decision_focus", False))).lower(),
+                "user_id": os.environ.get("MEMORYSYNC_USER_ID"),
+            },
+        )
+
+    elif name == "memorysync_decisions":
+        return _api(
+            req_id,
+            "GET",
+            "/memory/decisions",
+            query={
+                "query": args.get("query"),
+                "k": args.get("k", 10),
+                "user_id": os.environ.get("MEMORYSYNC_USER_ID"),
+            },
+        )
+
+    elif name == "memorysync_forget":
+        memory_ids = args.get("memory_ids") or []
+        if not isinstance(memory_ids, list) or not memory_ids:
+            return _tool_result(
+                req_id, "memory_ids must be a non-empty array of ids.", is_error=True
+            )
+        # Defaults to a preview. The caller has to pass dry_run=false explicitly,
+        # which mirrors the two-step confirmation the hosted server enforces on
+        # destructive tools.
+        dry_run = args.get("dry_run", True)
+        return _api(
+            req_id,
+            "DELETE",
+            "/memory/forget",
+            body={
+                "memory_ids": memory_ids,
+                "dry_run": bool(dry_run),
+                "reason": args.get("reason"),
+                "user_id": os.environ.get("MEMORYSYNC_USER_ID"),
+            },
+        )
 
     else:
         return {
