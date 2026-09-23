@@ -13,7 +13,7 @@ import urllib.request
 import urllib.error
 
 SERVER_NAME = "memorysync-cursor-starter"
-SERVER_VERSION = "1.0.1"
+SERVER_VERSION = "1.0.2"
 PROTOCOL_VERSION = "2024-11-05"
 
 DEFAULT_DOCS_ENDPOINT = os.environ.get("MEMORYSYNC_DOCS_MCP_URL", "https://docs.memorysync.io/mcp")
@@ -47,11 +47,25 @@ TOOLS = [
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Natural language description of the fact you are looking for, for example 'which ORM does this project use'."
+                    "description": (
+                        "Natural language description of the fact you are looking for, for "
+                        "example 'which ORM does this project use' or 'deployment target'. "
+                        "Phrase it as the topic you need, not as a question to the user. "
+                        "Matching is semantic, so exact wording from the original memory is "
+                        "not required. An empty or single-word query returns weak matches; "
+                        "prefer a short phrase."
+                    ),
+                    "minLength": 1,
+                    "examples": ["which ORM does this project use", "API error handling convention"]
                 },
                 "k": {
                     "type": "integer",
-                    "description": "Maximum number of memories to return. Use a small value; ranked results degrade after the top few.",
+                    "description": (
+                        "Maximum number of memories to return. Defaults to 5 if omitted. "
+                        "Ranked results degrade after the top few, so raise this only when "
+                        "surveying everything known about an area rather than answering one "
+                        "question."
+                    ),
                     "default": 5,
                     "minimum": 1,
                     "maximum": 50
@@ -101,17 +115,36 @@ TOOLS = [
             "properties": {
                 "text": {
                     "type": "string",
-                    "description": "One self-contained fact, written so it still makes sense with no surrounding conversation."
+                    "description": (
+                        "One self-contained fact, written so it still makes sense with no "
+                        "surrounding conversation. Write 'This project uses Postgres with "
+                        "SQLAlchemy 2.x', not 'we decided to use that one'. Pronouns and "
+                        "references to the current chat will not resolve in a later session."
+                    ),
+                    "minLength": 1,
+                    "examples": [
+                        "This project uses Postgres with SQLAlchemy 2.x",
+                        "All API errors must return RFC 7807 problem details"
+                    ]
                 },
                 "source": {
                     "type": "string",
-                    "description": "Which client or agent observed this, used for attribution when memories conflict.",
-                    "default": "cursor"
+                    "description": (
+                        "Which client or agent observed this fact, used for attribution when "
+                        "two memories conflict. Defaults to 'cursor' if omitted."
+                    ),
+                    "default": "cursor",
+                    "examples": ["cursor", "claude-code", "ci"]
                 },
                 "metadata": {
                     "type": "object",
-                    "description": "Optional key-value tags, for example {\"area\": \"database\"}, to narrow later searches.",
-                    "additionalProperties": True
+                    "description": (
+                        "Optional flat key-value tags used to narrow later searches, for "
+                        "example {\"area\": \"database\"}. Values should be short strings. "
+                        "Omit rather than passing an empty object."
+                    ),
+                    "additionalProperties": True,
+                    "examples": [{"area": "database"}, {"area": "api", "scope": "public"}]
                 }
             },
             "required": ["text"],
@@ -148,7 +181,15 @@ TOOLS = [
             "properties": {
                 "topic": {
                     "type": "string",
-                    "description": "Documentation topic or page slug, for example 'cursor', 'claude-code', 'langgraph', 'n8n', 'multi-tenant', or 'quickstart'."
+                    "description": (
+                        "Documentation topic or page slug, for example 'cursor', "
+                        "'claude-code', 'langgraph', 'n8n', 'multi-tenant', or 'quickstart'. "
+                        "An unrecognised topic returns the closest matching page rather than "
+                        "an error, so check the returned url before relying on the content. "
+                        "Pass one topic per call."
+                    ),
+                    "minLength": 1,
+                    "examples": ["cursor", "multi-tenant", "quickstart"]
                 }
             },
             "required": ["topic"],
