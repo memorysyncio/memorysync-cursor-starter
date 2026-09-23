@@ -2,7 +2,12 @@ version: '3.8'
 
 services:
   memorysync-starter:
-    build: .
+    # Dockerfile.dev, not the root Dockerfile: these services need bash, curl
+    # and jq for tools/inspect_memory.sh. The root Dockerfile is the minimal
+    # deployable server image and deliberately has none of that.
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
     container_name: memorysync-cursor-starter
     volumes:
       - .:/workspace
@@ -13,7 +18,9 @@ services:
     command: ["./tools/inspect_memory.sh", "ping"]
 
   test:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
     volumes:
       - .:/workspace
     environment:
