@@ -1,0 +1,191 @@
+name: MCP Server CI
+
+# Two reasons this exists. First, a stdio MCP server breaks in ways unit tests
+# miss: a stray print to stdout corrupts the JSON-RPC stream and the server goes
+# silent rather than failing loudly. Second, registries read CI status as a
+# maintenance signal, and "CI status not available" counts against the listing.
+#
+# So this does not test internals. It starts the server the way a client does,
+# speaks JSON-RPC to it, and asserts the contract holds.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: JSON-RPC contract (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install the package
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+
+      - name: Console script is installed
+        run: |
+          command -v memorysync-mcp
+          echo "entry point present"
+
+      - name: initialize handshake returns a protocol version
+        run: |
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}}}' \
+            | memorysync-mcp > init.jsonl 2>/dev/null || true
+          python - <<'PY'
+          import json, sys
+          found = False
+          for line in open("init.jsonl", encoding="utf-8"):
+              line = line.strip()
+              if not line:
+                  continue
+              msg = json.loads(line)
+              result = msg.get("result") or {}
+              if "protocolVersion" in result:
+                  print("protocolVersion:", result["protocolVersion"])
+                  print("serverInfo     :", result.get("serverInfo"))
+                  found = True
+          if not found:
+              sys.exit("initialize did not return a protocolVersion")
+          PY
+
+      - name: tools/list satisfies the published contract
+        run: |
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+            | memorysync-mcp > tools.jsonl 2>/dev/null || true
+          python - <<'PY'
+          import json, sys
+
+          EXPECTED = {"memorysync_search", "memorysync_add", "memorysync_read_docs"}
+
+          tools = None
+          for line in open("tools.jsonl", encoding="utf-8"):
+              line = line.strip()
+              if not line:
+                  continue
+              payload = json.loads(line).get("result", {})
+              if "tools" in payload:
+                  tools = payload["tools"]
+          if tools is None:
+              sys.exit("tools/list returned no tools array")
+
+          names = {t["name"] for t in tools}
+          if names != EXPECTED:
+              sys.exit(f"tool set drifted: expected {sorted(EXPECTED)}, got {sorted(names)}")
+
+          problems = []
+          for t in tools:
+              n = t["name"]
+              # Fields an agent relies on to choose correctly, and which the
+              # registry quality score grades.
+              for field in ("title", "description", "inputSchema", "outputSchema", "annotations"):
+                  if not t.get(field):
+                      problems.append(f"{n}: missing {field}")
+
+              schema = t.get("inputSchema") or {}
+              for param, spec in (schema.get("properties") or {}).items():
+                  if not spec.get("description"):
+                      problems.append(f"{n}: parameter '{param}' has no description")
+
+              # Disambiguation: each description must name a sibling tool so a
+              # model can tell overlapping tools apart.
+              siblings = EXPECTED - {n}
+              if not any(s in t["description"] for s in siblings):
+                  problems.append(f"{n}: description names no sibling tool")
+
+          if problems:
+              sys.exit("tool definition contract failed:\n  " + "\n  ".join(problems))
+
+          print(f"{len(tools)} tools validated:")
+          for t in tools:
+              ro = (t.get("annotations") or {}).get("readOnlyHint")
+              print(f"  {t['name']:<22} readOnly={ro}  {t['title']}")
+          PY
+
+      - name: stdout carries only JSON-RPC
+        run: |
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"ping","params":{}}' \
+            | memorysync-mcp > ping.jsonl 2>/dev/null || true
+          python - <<'PY'
+          import json, sys
+          lines = [l for l in open("ping.jsonl", encoding="utf-8").read().splitlines() if l.strip()]
+          if not lines:
+              sys.exit("ping produced no response")
+          for line in lines:
+              try:
+                  json.loads(line)
+              except json.JSONDecodeError:
+                  sys.exit(f"stdout contained non-JSON, which corrupts the stream: {line[:120]!r}")
+          print(f"{len(lines)} line(s) on stdout, all valid JSON")
+          PY
+
+      - name: unknown method returns a JSON-RPC error, not a crash
+        run: |
+          printf '%s\n' '{"jsonrpc":"2.0","id":9,"method":"does/notExist","params":{}}' \
+            | memorysync-mcp > bad.jsonl 2>/dev/null || true
+          python - <<'PY'
+          import json, sys
+          for line in open("bad.jsonl", encoding="utf-8"):
+              line = line.strip()
+              if not line:
+                  continue
+              msg = json.loads(line)
+              if "error" in msg:
+                  code = msg["error"].get("code")
+                  if code != -32601:
+                      sys.exit(f"expected method-not-found (-32601), got {code}")
+                  print("unknown method handled:", msg["error"].get("message"))
+                  break
+          else:
+              sys.exit("unknown method produced no error response")
+          PY
+
+  docker:
+    name: Deployable image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The root Dockerfile is what registries build to publish a release, so a
+      # break here blocks distribution, not just local dev.
+      - name: Build the server image
+        run: docker build -t memorysync-mcp:ci -f Dockerfile .
+
+      - name: Image serves tools over stdio
+        run: |
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+            | docker run -i --rm memorysync-mcp:ci > out.jsonl 2>/dev/null || true
+          python - <<'PY'
+          import json, sys
+          for line in open("out.jsonl", encoding="utf-8"):
+              line = line.strip()
+              if not line:
+                  continue
+              tools = json.loads(line).get("result", {}).get("tools")
+              if tools:
+                  print(f"container served {len(tools)} tools")
+                  sys.exit(0)
+          sys.exit("container did not serve tools/list")
+          PY
+
+      - name: Container runs unprivileged
+        run: |
+          uid=$(docker run --rm --entrypoint id memorysync-mcp:ci -u)
+          echo "container uid: $uid"
+          test "$uid" != "0" || { echo "server is running as root"; exit 1; }
