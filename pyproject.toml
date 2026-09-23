@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "memorysync-mcp-starter"
+version = "1.0.0"
+description = "Persistent, scoped memory for Cursor, Claude Desktop and Claude Code over the Model Context Protocol. Zero dependencies."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [{ name = "MemorySync", email = "team@memorysync.io" }]
+maintainers = [{ name = "MemorySync", email = "team@memorysync.io" }]
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "agent-memory",
+    "long-term-memory",
+    "cursor",
+    "claude",
+    "llm",
+    "retrieval",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+# Intentionally empty. The server speaks JSON-RPC 2.0 over stdio using only the
+# standard library, so it installs and starts with no dependency resolution and
+# no build step. Keep it that way: every dependency added here is a dependency
+# every developer trying the starter has to install before they see it work.
+dependencies = []
+
+[project.urls]
+Homepage = "https://memorysync.io"
+Documentation = "https://docs.memorysync.io"
+Repository = "https://github.com/memorysyncio/memorysync-cursor-starter"
+Issues = "https://github.com/memorysyncio/memorysync-cursor-starter/issues"
+
+[project.scripts]
+# Entry point that MCP clients and registries invoke. Declaring this is what
+# lets automated indexers start the server to enumerate its tools, rather than
+# having to guess at `python server.py`.
+memorysync-mcp = "server:main"
+
+[tool.setuptools]
+# Flat layout: the server is a single top-level module, not a package.
+py-modules = ["server"]
+
+[tool.setuptools.package-data]
+"*" = ["README.md", "LICENSE", ".cursorrules"]
