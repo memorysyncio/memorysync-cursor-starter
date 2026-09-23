@@ -19,61 +19,153 @@ PROTOCOL_VERSION = "2024-11-05"
 DEFAULT_DOCS_ENDPOINT = os.environ.get("MEMORYSYNC_DOCS_MCP_URL", "https://docs.memorysync.io/mcp")
 DEFAULT_API_ENDPOINT = os.environ.get("MEMORYSYNC_API_URL", "https://api.memorysync.io")
 
+# Tool definitions are what an LLM reads before deciding which tool to call, and
+# what Glama's Tool Definition Quality Score grades. Two rules apply here:
+#
+#   1. Every description states when to use the tool AND when not to. The failure
+#      mode these definitions guard against is a model confusing
+#      `memorysync_search` (the user's own saved project facts) with
+#      `memorysync_read_docs` (MemorySync's public product documentation). Both
+#      "retrieve information", so each one names the other as the alternative.
+#   2. Descriptions describe behaviour, not marketing. Latency figures do not
+#      help a model choose a tool, so they belong in the docs, not here.
 TOOLS = [
     {
         "name": "memorysync_search",
-        "description": "Semantic search over persistent long-term project and agent memories with sub-50ms latency.",
+        "title": "Search saved project memories",
+        "description": (
+            "Retrieve facts previously saved about THIS project and user: architectural "
+            "decisions, naming conventions, pinned dependency versions, and stated "
+            "preferences. Call this before answering questions about how the project is "
+            "built, and before re-asking the user something they may have already told "
+            "you. Returns ranked matches with an id and a relevance score. "
+            "This searches the user's own stored memories only - to look up how "
+            "MemorySync itself works, use memorysync_read_docs instead."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Natural language query to retrieve relevant memories for."
+                    "description": "Natural language description of the fact you are looking for, for example 'which ORM does this project use'."
                 },
                 "k": {
                     "type": "integer",
-                    "description": "Maximum number of memories to return (default: 5).",
-                    "default": 5
+                    "description": "Maximum number of memories to return. Use a small value; ranked results degrade after the top few.",
+                    "default": 5,
+                    "minimum": 1,
+                    "maximum": 50
                 }
             },
-            "required": ["query"]
+            "required": ["query"],
+            "additionalProperties": False
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "count": {"type": "integer", "description": "Number of memories returned."},
+                "results": {
+                    "type": "array",
+                    "description": "Matching memories, most relevant first.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string", "description": "Stable identifier, usable with memorysync_add metadata or for later reference."},
+                            "text": {"type": "string", "description": "The stored fact."},
+                            "score": {"type": "number", "description": "Relevance score for this query."},
+                            "created_at": {"type": "string", "description": "When the memory was first observed, for judging staleness."}
+                        }
+                    }
+                }
+            },
+            "required": ["count", "results"]
+        },
+        "annotations": {
+            "readOnlyHint": True,
+            "openWorldHint": True
         }
     },
     {
         "name": "memorysync_add",
-        "description": "Save a new durable memory, preference, or architectural decision across sessions.",
+        "title": "Save a durable project memory",
+        "description": (
+            "Persist one fact so it survives after this conversation ends: an architectural "
+            "decision, a convention the user asked you to follow, or a constraint that will "
+            "still be true next session. Call this when the user states a lasting preference "
+            "or you settle a design question. Do not call it for transient chat, for content "
+            "already returned by memorysync_search, or for anything a later session would be "
+            "misled by. Save one discrete fact per call rather than a conversation summary."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "text": {
                     "type": "string",
-                    "description": "The exact fact, convention, or architectural decision to persist."
+                    "description": "One self-contained fact, written so it still makes sense with no surrounding conversation."
                 },
                 "source": {
                     "type": "string",
-                    "description": "Origin of the memory (default: cursor).",
+                    "description": "Which client or agent observed this, used for attribution when memories conflict.",
                     "default": "cursor"
                 },
                 "metadata": {
                     "type": "object",
-                    "description": "Optional key-value metadata dictionary."
+                    "description": "Optional key-value tags, for example {\"area\": \"database\"}, to narrow later searches.",
+                    "additionalProperties": True
                 }
             },
-            "required": ["text"]
+            "required": ["text"],
+            "additionalProperties": False
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "Identifier of the stored memory."},
+                "status": {"type": "string", "description": "Result of the write, for example 'created'."}
+            },
+            "required": ["id", "status"]
+        },
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": True
         }
     },
     {
         "name": "memorysync_read_docs",
-        "description": "Query official MemorySync technical documentation, API endpoints, and integration guides on demand.",
+        "title": "Read MemorySync product documentation",
+        "description": (
+            "Look up MemorySync's own public documentation: REST endpoints, SDK usage, MCP "
+            "configuration, and integration guides. Call this before writing MemorySync "
+            "integration code, so method names and parameters come from current docs rather "
+            "than recall. Returns documentation text for the requested topic. "
+            "This reads MemorySync product documentation only - to retrieve facts about the "
+            "user's own project, use memorysync_search instead."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "topic": {
                     "type": "string",
-                    "description": "Topic to look up (e.g., 'cursor', 'mcp', 'langgraph', 'n8n', 'multitenancy')."
+                    "description": "Documentation topic or page slug, for example 'cursor', 'claude-code', 'langgraph', 'n8n', 'multi-tenant', or 'quickstart'."
                 }
             },
-            "required": ["topic"]
+            "required": ["topic"],
+            "additionalProperties": False
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "topic": {"type": "string", "description": "Topic that was resolved."},
+                "url": {"type": "string", "description": "Canonical documentation URL for the topic."},
+                "content": {"type": "string", "description": "Documentation text as Markdown."}
+            },
+            "required": ["topic", "content"]
+        },
+        "annotations": {
+            "readOnlyHint": True,
+            "openWorldHint": True
         }
     }
 ]
