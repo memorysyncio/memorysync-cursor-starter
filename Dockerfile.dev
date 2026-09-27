@@ -1,0 +1,36 @@
+# MemorySync Cursor Starter — developer sandbox
+#
+# An isolated environment for trying the starter without installing anything on
+# the host: Node.js, Python, and the shell tooling that tools/inspect_memory.sh
+# and the examples expect. This is what docker-compose.yml builds.
+#
+# The deployable server image is the root Dockerfile, which is deliberately
+# minimal and is what registries build.
+
+FROM node:20-slim
+
+# python3 for server.py and the examples; curl, bash and jq for
+# tools/inspect_memory.sh; git for cloning references inside the sandbox.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-venv \
+    curl \
+    bash \
+    git \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+ENV MEMORYSYNC_MCP_URL=https://mcp.memorysync.io/mcp
+ENV MEMORYSYNC_DOCS_MCP_URL=https://docs.memorysync.io/mcp
+ENV PYTHONUNBUFFERED=1
+
+COPY . /workspace
+
+RUN chmod +x setup.sh tools/inspect_memory.sh 2>/dev/null || true
+
+# docker-compose overrides this per service; it is here so the image is usable
+# standalone too.
+CMD ["python3", "server.py"]
