@@ -18,6 +18,39 @@ This repository is a production-ready starter template configured with **MemoryS
 
 ---
 
+## Get an API key (no account needed)
+
+`memorysync_read_docs` and the `memorysync-docs` server work without a key. The memory tools need one. You can get an evaluation key without signing up:
+
+- **In the browser:** open [memorysync.io/try](https://memorysync.io/try) and press **Create my key**.
+- **From a terminal:**
+  ```bash
+  curl --request POST https://api.memorysync.io/evaluation/keys \
+    --header "Content-Type: application/json" \
+    --data '{"agent_caller":"cursor"}'
+  ```
+  The response includes `api_key`, `default_user_id`, when the key expires (`expires_at`) and how many writes and searches it allows (`limits`).
+
+Then set both values where `server.py` reads them (the memory inspector reads the key too):
+
+```bash
+# macOS / Linux
+export MEMORYSYNC_API_KEY="<api_key>"
+export MEMORYSYNC_USER_ID="<default_user_id>"
+```
+
+```powershell
+# Windows PowerShell
+$env:MEMORYSYNC_API_KEY = "<api_key>"
+$env:MEMORYSYNC_USER_ID = "<default_user_id>"
+```
+
+`server.py` sends the key as `X-API-Key` and the user id as `X-End-User-ID`. Every memory is saved and searched under that end user, so give each person their own id. Without `MEMORYSYNC_USER_ID`, everyone shares `default-user`.
+
+An evaluation key stops working at `expires_at`. To keep a browser key, add your email on [memorysync.io/try](https://memorysync.io/try). For a permanent key, [create a free account](https://app.memorysync.io/register).
+
+---
+
 ## Running the MCP Server (stdio)
 
 Run the server directly with Python 3:
@@ -43,7 +76,11 @@ Or connect it to Claude Desktop / Cursor using stdio configuration:
 ### Supported MCP Tools:
 * `memorysync_search`: Semantic search over persistent long-term memories, ranked by meaning.
 * `memorysync_add`: Save a new durable memory, preference, or architectural decision.
-* `memorysync_read_docs`: Query official MemorySync API, SDK, and integration documentation on demand.
+* `memorysync_read_docs`: Query official MemorySync API, SDK, and integration documentation on demand. Needs no key.
+* `memorysync_get`: Read one memory in full, by the id a search returned.
+* `memorysync_related`: Find memories connected to a topic.
+* `memorysync_decisions`: List recorded decisions and the facts that contradict each other.
+* `memorysync_forget`: Delete memories. Shows what would be deleted first, and deletes nothing until you confirm.
 
 ---
 
