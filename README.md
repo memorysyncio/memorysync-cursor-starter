@@ -4,6 +4,8 @@
 
 This repository is a production-ready starter template configured with **MemorySync** and the **Model Context Protocol (MCP)**. It gives Cursor persistent, scoped memory across conversations, so you never have to re-explain your framework choices, database patterns, or pinned library versions.
 
+Every push to `main` runs the JSON-RPC contract in GitHub Actions. The server is started the way Cursor starts it, and the check speaks the protocol to it. Registries treat a missing CI status as a sign the project is unmaintained, so that run is part of keeping the listing healthy.
+
 ---
 
 ## What's Included
